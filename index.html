@@ -295,6 +295,10 @@
   }
   .tv-widget { width: 100%; height: 440px; border-radius: 10px; overflow: hidden; }
   .tv-widget-main { height: 560px; }
+  .tv-widget-fx { height: 240px; margin-top: 4px; }
+  .live-main-row { display: flex; gap: 14px; align-items: stretch; }
+  .tv-widget-fx-side { flex: 0 0 300px; width: 300px; height: 560px; }
+  .live-main-row .tv-widget-main { flex: 1 1 auto; min-width: 0; }
   .chart-link-btn {
     font-family: "Plex Mono Report", monospace;
     font-size: 11px;
@@ -309,6 +313,10 @@
   }
   .chart-link-btn:hover { border-color: var(--border); }
 
+  @media (max-width: 860px) {
+    .live-main-row { flex-direction: column; }
+    .tv-widget-fx-side { flex: none; width: 100%; height: 260px; }
+  }
   @media (max-width: 640px) {
     .nav-inner { padding: 9px 14px; gap: 12px; }
     .nav-links { gap: 2px; }
@@ -316,6 +324,7 @@
     .live-panel { right: -14px; }
     .tv-widget { height: 400px; }
     .tv-widget-main { height: 460px; }
+    .tv-widget-fx-side { height: 240px; }
   }
 
   /* ---- Chart modal (TradingView) ---- */
@@ -1024,7 +1033,10 @@
       <h2>실시간 시세</h2>
       <span class="section-sub"><span class="live-dot" aria-hidden="true"></span><span>TradingView 실시간</span></span>
     </div>
-    <div class="tv-widget tv-widget-main" id="tv-widget-main"></div>
+    <div class="live-main-row">
+      <div class="tv-widget tv-widget-fx-side" id="tv-widget-fx-main"></div>
+      <div class="tv-widget tv-widget-main" id="tv-widget-main"></div>
+    </div>
     <div class="live-foot">TradingView 실시간 시세 위젯 · 종목을 클릭하면 같은 데이터로 인라인 차트가 함께 열립니다 · 미국 정규장 시간 외에는 마지막 체결가가 표시됩니다.</div>
   </section>
 
@@ -1076,17 +1088,19 @@
   <section class="reveal" style="display:flex; flex-direction:column; gap:16px;">
     <div class="section-head">
       <h2>달러 · 원화 환산 기준</h2>
+      <span class="section-sub"><span class="live-dot" aria-hidden="true"></span><span>TradingView 실시간</span></span>
     </div>
     <div class="fx-card">
       <div class="fx-rate">
         <span class="big mono" id="fx-big">-</span>
         <span class="asof mono" id="fx-asof">-</span>
       </div>
+      <div class="tv-widget tv-widget-fx" id="tv-widget-fx"></div>
       <p class="fx-note">
-        위 표의 <b>원화 환산 현재가</b>와 시가총액 참고값은 모두 <b>오늘 시점의 환율 한 가지</b>로 환산한 값입니다.
-        6개월 전 시작가를 오늘 환율로 환산하면 실제 그 날짜의 원화 가치와는 다르므로, 이 리포트에서는
-        <b>수익률(%)은 환율 영향 없는 달러 기준 그대로</b> 사용했고, 원화 금액은 "오늘 기준으로 환산하면 얼마인지"를
-        보여주는 참고용으로만 표기했습니다.
+        위 표의 <b>원화 환산 현재가</b>와 시가총액 참고값은 모두 <b>리포트 작성 시점의 환율 한 가지</b>로 환산한 값입니다.
+        6개월 전 시작가를 그 환율로 환산하면 실제 그 날짜의 원화 가치와는 다르므로, 이 리포트에서는
+        <b>수익률(%)은 환율 영향 없는 달러 기준 그대로</b> 사용했고, 원화 금액은 "그 시점 기준으로 환산하면 얼마인지"를
+        보여주는 참고용으로만 표기했습니다. 위 위젯의 <b>달러/원, 테더/원(업비트)</b> 시세는 실시간이며, 표의 환산값과는 별개입니다.
       </p>
     </div>
   </section>
@@ -1333,10 +1347,24 @@
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
 
+  const STOCK_TAB = {
+    title: "주식 TOP 10",
+    symbols: DATA.companies.map((c) => ({ s: TV_SYMBOL[c.ticker], d: c.name_kr })),
+    originalTitle: "주식 TOP 10",
+  };
+  const FX_TAB = {
+    title: "환율",
+    symbols: [
+      { s: "FX_IDC:USDKRW", d: "달러/원" },
+      { s: "UPBIT:USDTKRW", d: "테더/원 (업비트)" },
+    ],
+    originalTitle: "환율",
+  };
+
   // ---- live quotes (TradingView Market Overview widget) ----
   // Uses the same TradingView data feed as the chart modal below, so the price
   // shown here always matches the price shown when a symbol's chart is opened.
-  function buildTVQuoteWidget(containerId, showChart) {
+  function buildTVQuoteWidget(containerId, showChart, tabs) {
     const container = document.getElementById(containerId);
     if (!container) return;
     container.innerHTML = "";
@@ -1361,19 +1389,15 @@
       showFloatingTooltip: false,
       width: "100%",
       height: "100%",
-      tabs: [
-        {
-          title: "TOP 10",
-          symbols: DATA.companies.map((c) => ({ s: TV_SYMBOL[c.ticker], d: c.name_kr })),
-          originalTitle: "TOP 10",
-        },
-      ],
+      tabs: tabs,
     });
     wrap.appendChild(script);
     container.appendChild(wrap);
   }
-  buildTVQuoteWidget("tv-widget-main", true);
-  buildTVQuoteWidget("tv-widget-nav", false);
+  buildTVQuoteWidget("tv-widget-fx-main", true, [FX_TAB]);
+  buildTVQuoteWidget("tv-widget-main", true, [STOCK_TAB]);
+  buildTVQuoteWidget("tv-widget-nav", false, [STOCK_TAB]);
+  buildTVQuoteWidget("tv-widget-fx", true, [FX_TAB]);
 
   const liveToggleBtn = document.getElementById("live-toggle");
   const livePanelEl = document.getElementById("live-panel");
