@@ -1,7 +1,10 @@
 <meta charset="utf-8">
 <script>
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-  if (location.hash) window.scrollTo(0, 0);
+  if (location.hash) {
+    window.scrollTo(0, 0);
+    history.replaceState(null, "", location.pathname + location.search);
+  }
 </script>
 <title>글로벌 시가총액 TOP 10 · 6개월 주가 리포트</title>
 
@@ -1462,16 +1465,4 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !chartModal.hidden) closeChartModal();
   });
-
-  // ---- land smoothly on a deep-linked section instead of jumping on load ----
-  if (location.hash) {
-    const target = document.querySelector(location.hash);
-    if (target) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      });
-    }
-  }
 </script>
