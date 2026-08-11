@@ -262,7 +262,10 @@
     padding: 1px 4px;
     margin: -1px -4px;
     border-radius: 5px;
-    transition: color 0.2s ease;
+    transition: color 0.2s ease, opacity 0.4s ease;
+  }
+  .nfx-val.stale {
+    opacity: 0.5;
   }
   @keyframes nfx-flash-up {
     0% { background: color-mix(in srgb, var(--good) 70%, transparent); color: var(--good-text); transform: scale(1.1); }
@@ -1468,16 +1471,32 @@
 
   const FLASH_DURATION_MS = 1200; // must match the CSS: 0.4s x 3 flashes
 
-  function setNfxValue(el, price, prevPrice) {
+  function loadCachedPrice(key) {
+    try {
+      const v = parseFloat(localStorage.getItem(key));
+      return Number.isFinite(v) ? v : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveCachedPrice(key, price) {
+    try {
+      localStorage.setItem(key, String(price));
+    } catch (e) {
+      // ignore (private browsing / storage disabled)
+    }
+  }
+
+  function setNfxValue(el, price, prevPrice, cacheKey) {
     const formatted = fmtKrw1(price);
     const prevFormatted = typeof prevPrice === "number" ? fmtKrw1(prevPrice) : null;
-    if (prevFormatted === null) {
-      el.textContent = formatted; // first successful load: just show it, no flash
+    el.classList.remove("stale");
+    saveCachedPrice(cacheKey, price);
+    if (prevFormatted === null || formatted === prevFormatted) {
+      // first load, or a raw move that rounds away at 1 decimal: show it, no flash needed
+      el.textContent = formatted;
       return;
     }
-    // only flash when the *displayed* number actually changes — a raw price
-    // move that rounds away at 1 decimal shouldn't trigger a flash with no visible change
-    if (formatted === prevFormatted) return;
 
     const dir = price > prevPrice ? "up" : "down";
     const arrow = dir === "up" ? "▲ " : "▼ ";
@@ -1493,7 +1512,20 @@
     }, FLASH_DURATION_MS);
   }
 
-  let lastUsdKrw = null;
+  const NFX_USD_CACHE_KEY = "nfx_usdkrw_v1";
+  const NFX_USDT_CACHE_KEY = "nfx_usdtkrw_v1";
+
+  let lastUsdKrw = loadCachedPrice(NFX_USD_CACHE_KEY);
+  if (lastUsdKrw !== null) {
+    nfxUsdEl.textContent = fmtKrw1(lastUsdKrw);
+    nfxUsdEl.classList.add("stale");
+  }
+  let lastUsdtKrw = loadCachedPrice(NFX_USDT_CACHE_KEY);
+  if (lastUsdtKrw !== null) {
+    nfxUsdtEl.textContent = fmtKrw1(lastUsdtKrw);
+    nfxUsdtEl.classList.add("stale");
+  }
+
   const TWELVEDATA_KEY = "ef6bad53c7cd43c2accbc1844d4da555";
   async function refreshUsdKrw() {
     try {
@@ -1502,14 +1534,13 @@
       const data = await res.json();
       const rate = data.rate;
       if (typeof rate !== "number") throw new Error("no KRW rate");
-      setNfxValue(nfxUsdEl, rate, lastUsdKrw);
+      setNfxValue(nfxUsdEl, rate, lastUsdKrw, NFX_USD_CACHE_KEY);
       lastUsdKrw = rate;
     } catch (e) {
-      if (nfxUsdEl.textContent === "…") nfxUsdEl.textContent = "-";
+      // leave the last known (live or cached) value on screen instead of blanking it out
     }
   }
 
-  let lastUsdtKrw = null;
   async function refreshUsdtKrw() {
     try {
       const res = await fetch("https://api.coingecko.com/api/v3/exchanges/upbit/tickers?coin_ids=tether");
@@ -1517,10 +1548,10 @@
       const data = await res.json();
       const ticker = (data.tickers || []).find((t) => t.base === "USDT" && t.target === "KRW");
       if (!ticker || typeof ticker.last !== "number") throw new Error("no USDT/KRW ticker");
-      setNfxValue(nfxUsdtEl, ticker.last, lastUsdtKrw);
+      setNfxValue(nfxUsdtEl, ticker.last, lastUsdtKrw, NFX_USDT_CACHE_KEY);
       lastUsdtKrw = ticker.last;
     } catch (e) {
-      if (nfxUsdtEl.textContent === "…") nfxUsdtEl.textContent = "-";
+      // leave the last known (live or cached) value on screen instead of blanking it out
     }
   }
 
