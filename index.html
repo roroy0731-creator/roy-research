@@ -253,6 +253,9 @@
   .nfx-badge-usd { background: linear-gradient(135deg, #5b93e8, #2c5fb8); }
   .nfx-badge-usdt { background: linear-gradient(135deg, #2ec297, #168664); font-size: 10.5px; }
   .nfx-label { font-size: 11px; color: var(--muted); }
+  .nfx-chg { font-size: 10.5px; font-weight: 600; }
+  .nfx-chg.up { color: var(--good-text); }
+  .nfx-chg.down { color: var(--critical); }
   .nfx-val {
     display: inline-block;
     font-size: 12.5px;
@@ -1020,15 +1023,17 @@
       <a class="nav-link" href="#about">리서치 소개</a>
     </div>
     <div class="nav-fx">
-      <span class="nfx-item" title="국제 달러/원 환율 · 실시간(약 30초마다 갱신)">
+      <span class="nfx-item" title="국제 달러/원 환율 · 실시간(약 10초마다 갱신) · 24시간 등락률 포함">
         <span class="nfx-badge nfx-badge-usd" aria-hidden="true">$</span>
         <span class="nfx-label">달러/원</span>
         <span class="nfx-val mono" id="nfx-usdkrw">…</span>
+        <span class="nfx-chg mono" id="nfx-usdkrw-chg"></span>
       </span>
-      <span class="nfx-item" title="업비트 USDT/KRW 실시간 체결가">
+      <span class="nfx-item" title="테더/원(USDT/KRW) 실시간 시세 · 24시간 등락률 포함">
         <span class="nfx-badge nfx-badge-usdt" aria-hidden="true">₮</span>
         <span class="nfx-label">테더/원</span>
         <span class="nfx-val mono" id="nfx-usdtkrw">…</span>
+        <span class="nfx-chg mono" id="nfx-usdtkrw-chg"></span>
       </span>
     </div>
     <div class="nav-live" id="nav-live">
@@ -1464,8 +1469,18 @@
   // ---- compact inline FX ticker (plain numbers, styled to match the page) ----
   const nfxUsdEl = document.getElementById("nfx-usdkrw");
   const nfxUsdtEl = document.getElementById("nfx-usdtkrw");
+  const nfxUsdChgEl = document.getElementById("nfx-usdkrw-chg");
+  const nfxUsdtChgEl = document.getElementById("nfx-usdtkrw-chg");
   const USD_REFRESH_MS = 10000; // twelvedata free tier: 8 req/min cap, this stays at 6/min
   const USDT_REFRESH_MS = 8000; // CoinGecko public API
+
+  function setNfxChange(el, pct) {
+    if (typeof pct !== "number" || !Number.isFinite(pct)) return;
+    const dir = pct >= 0 ? "up" : "down";
+    el.textContent = (pct >= 0 ? "▲" : "▼") + " " + Math.abs(pct).toFixed(2) + "%";
+    el.classList.remove("up", "down");
+    el.classList.add(dir);
+  }
 
   const fmtKrw1 = (v) => "₩" + v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -1529,13 +1544,14 @@
   const TWELVEDATA_KEY = "ef6bad53c7cd43c2accbc1844d4da555";
   async function refreshUsdKrw() {
     try {
-      const res = await fetch(`https://api.twelvedata.com/exchange_rate?symbol=USD/KRW&apikey=${TWELVEDATA_KEY}`);
+      const res = await fetch(`https://api.twelvedata.com/quote?symbol=USD/KRW&apikey=${TWELVEDATA_KEY}`);
       if (!res.ok) throw new Error("usdkrw fetch failed");
       const data = await res.json();
-      const rate = data.rate;
-      if (typeof rate !== "number") throw new Error("no KRW rate");
+      const rate = parseFloat(data.close);
+      if (!Number.isFinite(rate)) throw new Error("no KRW rate");
       setNfxValue(nfxUsdEl, rate, lastUsdKrw, NFX_USD_CACHE_KEY);
       lastUsdKrw = rate;
+      setNfxChange(nfxUsdChgEl, parseFloat(data.percent_change));
     } catch (e) {
       // leave the last known (live or cached) value on screen instead of blanking it out
     }
@@ -1543,13 +1559,14 @@
 
   async function refreshUsdtKrw() {
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/exchanges/upbit/tickers?coin_ids=tether");
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw&include_24hr_change=true");
       if (!res.ok) throw new Error("usdtkrw fetch failed");
       const data = await res.json();
-      const ticker = (data.tickers || []).find((t) => t.base === "USDT" && t.target === "KRW");
-      if (!ticker || typeof ticker.last !== "number") throw new Error("no USDT/KRW ticker");
-      setNfxValue(nfxUsdtEl, ticker.last, lastUsdtKrw, NFX_USDT_CACHE_KEY);
-      lastUsdtKrw = ticker.last;
+      const price = data.tether && data.tether.krw;
+      if (typeof price !== "number") throw new Error("no USDT/KRW price");
+      setNfxValue(nfxUsdtEl, price, lastUsdtKrw, NFX_USDT_CACHE_KEY);
+      lastUsdtKrw = price;
+      setNfxChange(nfxUsdtChgEl, data.tether.krw_24h_change);
     } catch (e) {
       // leave the last known (live or cached) value on screen instead of blanking it out
     }
