@@ -267,15 +267,17 @@
   .nfx-val.up { color: var(--good-text); }
   .nfx-val.down { color: var(--critical); }
   @keyframes nfx-flash-up {
-    0% { background: color-mix(in srgb, var(--good) 38%, transparent); }
-    100% { background: transparent; }
+    0% { background: color-mix(in srgb, var(--good) 65%, transparent); transform: scale(1.08); }
+    40% { background: color-mix(in srgb, var(--good) 45%, transparent); }
+    100% { background: transparent; transform: scale(1); }
   }
   @keyframes nfx-flash-down {
-    0% { background: color-mix(in srgb, var(--critical) 38%, transparent); }
-    100% { background: transparent; }
+    0% { background: color-mix(in srgb, var(--critical) 65%, transparent); transform: scale(1.08); }
+    40% { background: color-mix(in srgb, var(--critical) 45%, transparent); }
+    100% { background: transparent; transform: scale(1); }
   }
-  .nfx-val.flash-up { animation: nfx-flash-up 1s ease-out; }
-  .nfx-val.flash-down { animation: nfx-flash-down 1s ease-out; }
+  .nfx-val.flash-up { animation: nfx-flash-up 1.4s ease-out; }
+  .nfx-val.flash-down { animation: nfx-flash-down 1.4s ease-out; }
   @media (prefers-reduced-motion: reduce) {
     .nfx-val.flash-up, .nfx-val.flash-down { animation: none; }
   }
@@ -1468,9 +1470,19 @@
   const fmtKrw1 = (v) => "₩" + v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   function setNfxValue(el, price, prevPrice) {
-    el.textContent = fmtKrw1(price);
-    if (typeof prevPrice === "number" && price !== prevPrice) {
-      const dir = price > prevPrice ? "up" : "down";
+    const formatted = fmtKrw1(price);
+    const prevFormatted = typeof prevPrice === "number" ? fmtKrw1(prevPrice) : null;
+    // only flash when the *displayed* number actually changes — a raw price
+    // move that rounds away at 1 decimal shouldn't trigger a flash with no visible change
+    let dir = null;
+    if (prevFormatted !== null && formatted !== prevFormatted) {
+      dir = price > prevPrice ? "up" : "down";
+    }
+    const carriedDir = el.classList.contains("up") ? "up" : el.classList.contains("down") ? "down" : null;
+    const shownDir = dir || carriedDir;
+    const arrow = shownDir === "up" ? "▲ " : shownDir === "down" ? "▼ " : "";
+    el.textContent = arrow + formatted;
+    if (dir) {
       el.classList.remove("up", "down", "flash-up", "flash-down");
       void el.offsetWidth; // restart the flash animation on repeated changes
       el.classList.add(dir, "flash-" + dir);
