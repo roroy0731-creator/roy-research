@@ -275,8 +275,8 @@
     0% { background: color-mix(in srgb, var(--critical) 70%, transparent); color: var(--critical); transform: scale(1.1); }
     100% { background: transparent; color: var(--critical); transform: scale(1); }
   }
-  .nfx-val.flash-up { animation: nfx-flash-up 0.4s ease-out 3; }
-  .nfx-val.flash-down { animation: nfx-flash-down 0.4s ease-out 3; }
+  .nfx-val.flash-up { animation: nfx-flash-up 0.4s ease-out 2; }
+  .nfx-val.flash-down { animation: nfx-flash-down 0.4s ease-out 2; }
   @media (prefers-reduced-motion: reduce) {
     .nfx-val.flash-up, .nfx-val.flash-down { animation: none; }
   }
@@ -1469,7 +1469,7 @@
 
   const fmtKrw1 = (v) => "₩" + v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-  const FLASH_DURATION_MS = 1200; // must match the CSS: 0.4s x 3 flashes
+  const FLASH_DURATION_MS = 800; // must match the CSS: 0.4s x 2 flashes
 
   function loadCachedPrice(key) {
     try {
