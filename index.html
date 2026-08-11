@@ -1019,7 +1019,7 @@
       <a class="nav-link" href="#about">리서치 소개</a>
     </div>
     <div class="nav-fx">
-      <span class="nfx-item" title="국제 달러/원 환율 · 매일 갱신">
+      <span class="nfx-item" title="국제 달러/원 환율 · 실시간(약 30초마다 갱신)">
         <span class="nfx-badge nfx-badge-usd" aria-hidden="true">$</span>
         <span class="nfx-label">달러/원</span>
         <span class="nfx-val mono" id="nfx-usdkrw">…</span>
@@ -1478,12 +1478,13 @@
   }
 
   let lastUsdKrw = null;
+  const TWELVEDATA_KEY = "ef6bad53c7cd43c2accbc1844d4da555";
   async function refreshUsdKrw() {
     try {
-      const res = await fetch("https://open.er-api.com/v6/latest/USD");
+      const res = await fetch(`https://api.twelvedata.com/exchange_rate?symbol=USD/KRW&apikey=${TWELVEDATA_KEY}`);
       if (!res.ok) throw new Error("usdkrw fetch failed");
       const data = await res.json();
-      const rate = data.rates && data.rates.KRW;
+      const rate = data.rate;
       if (typeof rate !== "number") throw new Error("no KRW rate");
       setNfxValue(nfxUsdEl, rate, lastUsdKrw);
       lastUsdKrw = rate;
