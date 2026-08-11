@@ -227,7 +227,23 @@
 
   /* ---- Live quotes menu ---- */
   .nav-live { position: relative; flex: none; }
-  .nav-fx { flex: none; width: 230px; height: 30px; }
+  .nav-fx {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    flex: none;
+    white-space: nowrap;
+  }
+  .nfx-item { display: inline-flex; align-items: baseline; gap: 5px; }
+  .nfx-label { font-size: 11px; color: var(--muted); }
+  .nfx-val {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
+    transition: color 0.2s ease;
+  }
+  .nfx-val.up { color: var(--good-text); }
+  .nfx-val.down { color: var(--critical); }
   .nav-live-btn {
     display: inline-flex;
     align-items: center;
@@ -316,7 +332,8 @@
     .nav-links { gap: 2px; }
     .nav-link { padding: 6px 10px; font-size: 12px; }
     .live-panel { right: -14px; }
-    .nav-fx { width: 180px; }
+    .nav-fx { gap: 10px; }
+    .nfx-label { display: none; }
     .tv-widget { height: 400px; }
     .tv-widget-main { height: 460px; }
   }
@@ -966,7 +983,16 @@
       <a class="nav-link" href="#data">데이터</a>
       <a class="nav-link" href="#about">리서치 소개</a>
     </div>
-    <div class="nav-fx" id="nav-fx-ticker"></div>
+    <div class="nav-fx">
+      <span class="nfx-item" title="국제 달러/원 환율 · 매일 갱신">
+        <span class="nfx-label">달러/원</span>
+        <span class="nfx-val mono" id="nfx-usdkrw">…</span>
+      </span>
+      <span class="nfx-item" title="업비트 USDT/KRW 실시간 체결가">
+        <span class="nfx-label">테더/원</span>
+        <span class="nfx-val mono" id="nfx-usdtkrw">…</span>
+      </span>
+    </div>
     <div class="nav-live" id="nav-live">
       <button class="nav-link nav-live-btn" id="live-toggle" type="button" aria-expanded="false" aria-controls="live-panel">
         <span class="live-dot" aria-hidden="true"></span>실시간 시세
@@ -1389,38 +1415,60 @@
   buildTVQuoteWidget("tv-widget-main", true, [STOCK_TAB]);
   buildTVQuoteWidget("tv-widget-nav", false, [STOCK_TAB]);
 
-  // ---- compact inline FX ticker (always visible, no click needed) ----
-  function buildTVTickerWidget(containerId, symbols) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    container.innerHTML = "";
-    const wrap = document.createElement("div");
-    wrap.className = "tradingview-widget-container";
-    wrap.style.height = "100%";
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
-    widgetDiv.style.height = "100%";
-    wrap.appendChild(widgetDiv);
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-tickers.js";
-    script.async = true;
-    script.text = JSON.stringify({
-      symbols: symbols,
-      colorTheme: currentTheme(),
-      locale: "kr",
-      isTransparent: true,
-      showSymbolLogo: false,
-      width: "100%",
-      height: "100%",
-    });
-    wrap.appendChild(script);
-    container.appendChild(wrap);
-  }
-  buildTVTickerWidget("nav-fx-ticker", [
-    { proName: "FX_IDC:USDKRW", title: "달러/원" },
-    { proName: "UPBIT:USDTKRW", title: "테더/원" },
-  ]);
   buildTVQuoteWidget("tv-widget-fx", true, [FX_TAB]);
+
+  // ---- compact inline FX ticker (plain numbers, styled to match the page) ----
+  const nfxUsdEl = document.getElementById("nfx-usdkrw");
+  const nfxUsdtEl = document.getElementById("nfx-usdtkrw");
+  const FX_REFRESH_MS = 30000;
+
+  function setNfxValue(el, price, prevPrice) {
+    el.textContent = fmtKrw(price);
+    if (typeof prevPrice === "number") {
+      el.classList.remove("up", "down");
+      if (price > prevPrice) el.classList.add("up");
+      else if (price < prevPrice) el.classList.add("down");
+    }
+  }
+
+  let lastUsdKrw = null;
+  async function refreshUsdKrw() {
+    try {
+      const res = await fetch("https://open.er-api.com/v6/latest/USD");
+      if (!res.ok) throw new Error("usdkrw fetch failed");
+      const data = await res.json();
+      const rate = data.rates && data.rates.KRW;
+      if (typeof rate !== "number") throw new Error("no KRW rate");
+      setNfxValue(nfxUsdEl, rate, lastUsdKrw);
+      lastUsdKrw = rate;
+    } catch (e) {
+      if (nfxUsdEl.textContent === "…") nfxUsdEl.textContent = "-";
+    }
+  }
+
+  let lastUsdtKrw = null;
+  async function refreshUsdtKrw() {
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/exchanges/upbit/tickers?coin_ids=tether");
+      if (!res.ok) throw new Error("usdtkrw fetch failed");
+      const data = await res.json();
+      const ticker = (data.tickers || []).find((t) => t.base === "USDT" && t.target === "KRW");
+      if (!ticker || typeof ticker.last !== "number") throw new Error("no USDT/KRW ticker");
+      setNfxValue(nfxUsdtEl, ticker.last, lastUsdtKrw);
+      lastUsdtKrw = ticker.last;
+    } catch (e) {
+      if (nfxUsdtEl.textContent === "…") nfxUsdtEl.textContent = "-";
+    }
+  }
+
+  refreshUsdKrw();
+  refreshUsdtKrw();
+  setInterval(() => {
+    if (!document.hidden) refreshUsdKrw();
+  }, FX_REFRESH_MS);
+  setInterval(() => {
+    if (!document.hidden) refreshUsdtKrw();
+  }, FX_REFRESH_MS / 3);
 
   const navDropdownClosers = [];
   function closeAllNavDropdowns() {
