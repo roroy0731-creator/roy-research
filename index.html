@@ -264,20 +264,16 @@
     border-radius: 5px;
     transition: color 0.2s ease;
   }
-  .nfx-val.up { color: var(--good-text); }
-  .nfx-val.down { color: var(--critical); }
   @keyframes nfx-flash-up {
-    0% { background: color-mix(in srgb, var(--good) 65%, transparent); transform: scale(1.08); }
-    40% { background: color-mix(in srgb, var(--good) 45%, transparent); }
-    100% { background: transparent; transform: scale(1); }
+    0% { background: color-mix(in srgb, var(--good) 70%, transparent); color: var(--good-text); transform: scale(1.1); }
+    100% { background: transparent; color: var(--good-text); transform: scale(1); }
   }
   @keyframes nfx-flash-down {
-    0% { background: color-mix(in srgb, var(--critical) 65%, transparent); transform: scale(1.08); }
-    40% { background: color-mix(in srgb, var(--critical) 45%, transparent); }
-    100% { background: transparent; transform: scale(1); }
+    0% { background: color-mix(in srgb, var(--critical) 70%, transparent); color: var(--critical); transform: scale(1.1); }
+    100% { background: transparent; color: var(--critical); transform: scale(1); }
   }
-  .nfx-val.flash-up { animation: nfx-flash-up 1.4s ease-out; }
-  .nfx-val.flash-down { animation: nfx-flash-down 1.4s ease-out; }
+  .nfx-val.flash-up { animation: nfx-flash-up 0.4s ease-out 3; }
+  .nfx-val.flash-down { animation: nfx-flash-down 0.4s ease-out 3; }
   @media (prefers-reduced-motion: reduce) {
     .nfx-val.flash-up, .nfx-val.flash-down { animation: none; }
   }
@@ -1465,28 +1461,36 @@
   // ---- compact inline FX ticker (plain numbers, styled to match the page) ----
   const nfxUsdEl = document.getElementById("nfx-usdkrw");
   const nfxUsdtEl = document.getElementById("nfx-usdtkrw");
-  const FX_REFRESH_MS = 30000;
+  const USD_REFRESH_MS = 10000; // twelvedata free tier: 8 req/min cap, this stays at 6/min
+  const USDT_REFRESH_MS = 8000; // CoinGecko public API
 
   const fmtKrw1 = (v) => "₩" + v.toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const FLASH_DURATION_MS = 1200; // must match the CSS: 0.4s x 3 flashes
 
   function setNfxValue(el, price, prevPrice) {
     const formatted = fmtKrw1(price);
     const prevFormatted = typeof prevPrice === "number" ? fmtKrw1(prevPrice) : null;
+    if (prevFormatted === null) {
+      el.textContent = formatted; // first successful load: just show it, no flash
+      return;
+    }
     // only flash when the *displayed* number actually changes — a raw price
     // move that rounds away at 1 decimal shouldn't trigger a flash with no visible change
-    let dir = null;
-    if (prevFormatted !== null && formatted !== prevFormatted) {
-      dir = price > prevPrice ? "up" : "down";
-    }
-    const carriedDir = el.classList.contains("up") ? "up" : el.classList.contains("down") ? "down" : null;
-    const shownDir = dir || carriedDir;
-    const arrow = shownDir === "up" ? "▲ " : shownDir === "down" ? "▼ " : "";
+    if (formatted === prevFormatted) return;
+
+    const dir = price > prevPrice ? "up" : "down";
+    const arrow = dir === "up" ? "▲ " : "▼ ";
     el.textContent = arrow + formatted;
-    if (dir) {
-      el.classList.remove("up", "down", "flash-up", "flash-down");
-      void el.offsetWidth; // restart the flash animation on repeated changes
-      el.classList.add(dir, "flash-" + dir);
-    }
+    el.classList.remove("flash-up", "flash-down");
+    void el.offsetWidth; // restart the flash animation on repeated changes
+    el.classList.add("flash-" + dir);
+
+    clearTimeout(el._nfxRevertTimer);
+    el._nfxRevertTimer = setTimeout(() => {
+      el.classList.remove("flash-up", "flash-down");
+      el.textContent = formatted;
+    }, FLASH_DURATION_MS);
   }
 
   let lastUsdKrw = null;
@@ -1524,10 +1528,10 @@
   refreshUsdtKrw();
   setInterval(() => {
     if (!document.hidden) refreshUsdKrw();
-  }, FX_REFRESH_MS);
+  }, USD_REFRESH_MS);
   setInterval(() => {
     if (!document.hidden) refreshUsdtKrw();
-  }, FX_REFRESH_MS / 3);
+  }, USDT_REFRESH_MS);
 
   const navDropdownClosers = [];
   function closeAllNavDropdowns() {
