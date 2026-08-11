@@ -234,16 +234,51 @@
     flex: none;
     white-space: nowrap;
   }
-  .nfx-item { display: inline-flex; align-items: baseline; gap: 5px; }
+  .nfx-item { display: inline-flex; align-items: center; gap: 6px; }
+  .nfx-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-family: "Plex Mono Report", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  .nfx-badge-usd { background: linear-gradient(135deg, #3fbf6f, #1f8a48); }
+  .nfx-badge-usdt { background: linear-gradient(135deg, #2ec297, #168664); font-size: 10.5px; }
   .nfx-label { font-size: 11px; color: var(--muted); }
   .nfx-val {
+    display: inline-block;
     font-size: 12.5px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--ink);
+    padding: 1px 4px;
+    margin: -1px -4px;
+    border-radius: 5px;
     transition: color 0.2s ease;
   }
   .nfx-val.up { color: var(--good-text); }
   .nfx-val.down { color: var(--critical); }
+  @keyframes nfx-flash-up {
+    0% { background: color-mix(in srgb, var(--good) 38%, transparent); }
+    100% { background: transparent; }
+  }
+  @keyframes nfx-flash-down {
+    0% { background: color-mix(in srgb, var(--critical) 38%, transparent); }
+    100% { background: transparent; }
+  }
+  .nfx-val.flash-up { animation: nfx-flash-up 1s ease-out; }
+  .nfx-val.flash-down { animation: nfx-flash-down 1s ease-out; }
+  @media (prefers-reduced-motion: reduce) {
+    .nfx-val.flash-up, .nfx-val.flash-down { animation: none; }
+  }
   .nav-live-btn {
     display: inline-flex;
     align-items: center;
@@ -985,10 +1020,12 @@
     </div>
     <div class="nav-fx">
       <span class="nfx-item" title="국제 달러/원 환율 · 매일 갱신">
+        <span class="nfx-badge nfx-badge-usd" aria-hidden="true">$</span>
         <span class="nfx-label">달러/원</span>
         <span class="nfx-val mono" id="nfx-usdkrw">…</span>
       </span>
       <span class="nfx-item" title="업비트 USDT/KRW 실시간 체결가">
+        <span class="nfx-badge nfx-badge-usdt" aria-hidden="true">₮</span>
         <span class="nfx-label">테더/원</span>
         <span class="nfx-val mono" id="nfx-usdtkrw">…</span>
       </span>
@@ -1415,6 +1452,12 @@
   buildTVQuoteWidget("tv-widget-main", true, [STOCK_TAB]);
   buildTVQuoteWidget("tv-widget-nav", false, [STOCK_TAB]);
 
+  // size the FX widget to the number of currencies it holds, so it never
+  // needs an internal scroll to show them and doesn't waste space either
+  const fxWidgetEl = document.getElementById("tv-widget-fx");
+  const FX_CHART_AREA = 190;
+  const FX_ROW_HEIGHT = 56;
+  fxWidgetEl.style.height = (FX_CHART_AREA + FX_TAB.symbols.length * FX_ROW_HEIGHT) + "px";
   buildTVQuoteWidget("tv-widget-fx", true, [FX_TAB]);
 
   // ---- compact inline FX ticker (plain numbers, styled to match the page) ----
@@ -1424,10 +1467,11 @@
 
   function setNfxValue(el, price, prevPrice) {
     el.textContent = fmtKrw(price);
-    if (typeof prevPrice === "number") {
-      el.classList.remove("up", "down");
-      if (price > prevPrice) el.classList.add("up");
-      else if (price < prevPrice) el.classList.add("down");
+    if (typeof prevPrice === "number" && price !== prevPrice) {
+      const dir = price > prevPrice ? "up" : "down";
+      el.classList.remove("up", "down", "flash-up", "flash-down");
+      void el.offsetWidth; // restart the flash animation on repeated changes
+      el.classList.add(dir, "flash-" + dir);
     }
   }
 
