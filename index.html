@@ -1558,22 +1558,40 @@
   }
 
   async function refreshUsdtKrw() {
+    // Upbit's own last trade — matches ROY OS / what you'd see on Upbit itself
     try {
-      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw&include_24hr_change=true");
+      const res = await fetch("https://api.coingecko.com/api/v3/exchanges/upbit/tickers?coin_ids=tether");
       if (!res.ok) throw new Error("usdtkrw fetch failed");
       const data = await res.json();
-      const price = data.tether && data.tether.krw;
-      if (typeof price !== "number") throw new Error("no USDT/KRW price");
-      setNfxValue(nfxUsdtEl, price, lastUsdtKrw, NFX_USDT_CACHE_KEY);
-      lastUsdtKrw = price;
-      setNfxChange(nfxUsdtChgEl, data.tether.krw_24h_change);
+      const ticker = (data.tickers || []).find((t) => t.base === "USDT" && t.target === "KRW");
+      if (!ticker || typeof ticker.last !== "number") throw new Error("no USDT/KRW ticker");
+      setNfxValue(nfxUsdtEl, ticker.last, lastUsdtKrw, NFX_USDT_CACHE_KEY);
+      lastUsdtKrw = ticker.last;
     } catch (e) {
       // leave the last known (live or cached) value on screen instead of blanking it out
     }
   }
 
+  const USDT_CHANGE_REFRESH_MS = 30000; // secondary figure, doesn't need 8s freshness
+  async function refreshUsdtChange() {
+    // global aggregate is close enough for the 24h change badge; the
+    // Upbit-specific ticker endpoint above doesn't provide one
+    try {
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=krw&include_24hr_change=true");
+      if (!res.ok) throw new Error("usdt change fetch failed");
+      const data = await res.json();
+      setNfxChange(nfxUsdtChgEl, data.tether && data.tether.krw_24h_change);
+    } catch (e) {
+      // leave whatever change% is already shown
+    }
+  }
+
   refreshUsdKrw();
   refreshUsdtKrw();
+  refreshUsdtChange();
+  setInterval(() => {
+    if (!document.hidden) refreshUsdtChange();
+  }, USDT_CHANGE_REFRESH_MS);
   setInterval(() => {
     if (!document.hidden) refreshUsdKrw();
   }, USD_REFRESH_MS);
